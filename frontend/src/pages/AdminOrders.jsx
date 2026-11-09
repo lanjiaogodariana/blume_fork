@@ -1,49 +1,62 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
+import { apiGet, apiPost, getImageUrl } from "../utils/api";
 
 export default function AdminOrders() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem("blume_admin_auth") === "true";
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => !!sessionStorage.getItem("blume_admin_key"),
+  );
   const [passcode, setPasscode] = useState("");
   const [passcodeError, setPasscodeError] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedOrder, setExpandedOrder] = useState(null);
 
-  // Verify Passcode Entry
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (passcode === "blume2026") {
-      sessionStorage.setItem("blume_admin_auth", "true");
+    setVerifying(true);
+    setPasscodeError(false);
+    try {
+      await apiPost("/api/admin/verify", { passcode });
+      sessionStorage.setItem("blume_admin_key", passcode);
       setIsAuthenticated(true);
-      setPasscodeError(false);
-    } else {
+      setPasscode("");
+    } catch (err) {
+      console.error("Admin verify error:", err);
       setPasscodeError(true);
+    } finally {
+      setVerifying(false);
     }
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem("blume_admin_auth");
+    sessionStorage.removeItem("blume_admin_key");
     setIsAuthenticated(false);
   };
 
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    fetch("http://localhost:5000/api/orders")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch orders");
-        return res.json();
-      })
+    const adminKey = sessionStorage.getItem("blume_admin_key");
+    setLoading(true);
+    setError("");
+
+    apiGet("/api/orders", { headers: { "X-Admin-Key": adminKey || "" } })
       .then((data) => {
         setOrders(data);
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Admin order fetch error:", err);
-        setError("Unable to load orders from backend server.");
+        if (err.status === 401) {
+          sessionStorage.removeItem("blume_admin_key");
+          setIsAuthenticated(false);
+          setError("Session expired — please log in again.");
+        } else {
+          console.error("Admin order fetch error:", err);
+          setError(err.message || "Unable to load orders from backend server.");
+        }
         setLoading(false);
       });
   }, [isAuthenticated]);
@@ -65,7 +78,7 @@ export default function AdminOrders() {
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="password"
-              placeholder="Passcode (Default: blume2026)"
+              placeholder="Enter admin passcode"
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
               className={`w-full border p-3 text-xs focus:outline-none transition ${
@@ -76,15 +89,19 @@ export default function AdminOrders() {
             />
             {passcodeError && (
               <p className="text-[10px] text-red-500 uppercase tracking-widest">
-                Invalid passcode. Try{" "}
-                <span className="font-semibold">blume2026</span>
+                Invalid passcode. Please try again.
               </p>
             )}
             <button
               type="submit"
-              className="w-full bg-black text-white py-3.5 text-xs uppercase tracking-widest hover:bg-gray-800 transition"
+              disabled={verifying}
+              className={`w-full bg-black text-white py-3.5 text-xs uppercase tracking-widest transition ${
+                verifying
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-gray-800"
+              }`}
             >
-              Unlock Dashboard
+              {verifying ? "Verifying..." : "Unlock Dashboard"}
             </button>
           </form>
         </div>
@@ -175,7 +192,7 @@ export default function AdminOrders() {
                     : "N/A";
 
                   return (
-                    <tbody key={order.id} className="divide-y divide-gray-100">
+                    <Fragment key={order.id}>
                       <tr className="hover:bg-gray-50/50 transition">
                         <td className="py-4 px-6 font-semibold">#{order.id}</td>
                         <td className="py-4 px-6">
@@ -237,12 +254,9 @@ export default function AdminOrders() {
                                 </h4>
                                 <div className="space-y-3">
                                   {order.items.map((item, idx) => {
-                                    const imageUrl = item.image_url
-                                      ? item.image_url.startsWith("http") ||
-                                        item.image_url.startsWith("/")
-                                        ? item.image_url
-                                        : `/${item.image_url}`
-                                      : null;
+                                    const imageUrl = getImageUrl(
+                                      item.image_url,
+                                    );
 
                                     return (
                                       <div
@@ -261,6 +275,9 @@ export default function AdminOrders() {
                                             {item.name}
                                           </p>
                                           <p className="text-gray-400 text-[10px]">
+                                            {item.size && item.color
+                                              ? `Size: ${item.size} · Color: ${item.color} · `
+                                              : ""}
                                             Qty: {item.quantity} × $
                                             {Number(item.price).toFixed(2)}
                                           </p>
@@ -280,7 +297,7 @@ export default function AdminOrders() {
                           </td>
                         </tr>
                       )}
-                    </tbody>
+                    </Fragment>
                   );
                 })}
               </tbody>

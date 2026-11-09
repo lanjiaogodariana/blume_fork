@@ -12,23 +12,60 @@ export function CartProvider({ children }) {
     localStorage.setItem("blume_cart", JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = (product, size = "M", quantity = 1) => {
+  // Match on id + size + color so each variant is a separate line item.
+  const addToCart = (product, size, color, quantity = 1) => {
+    const safeSize = size || "Standard";
+    const safeColor = color || "Standard";
+    const safeQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
+
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (item) => item.id === product.id && item.size === size,
+        (item) =>
+          item.id === product.id &&
+          item.size === safeSize &&
+          item.color === safeColor,
       );
       if (existingIndex > -1) {
-        const updated = [...prev];
-        updated[existingIndex].quantity += quantity;
-        return updated;
+        // Immutable update — new array, new object at the matched index
+        return prev.map((item, i) =>
+          i === existingIndex
+            ? { ...item, quantity: item.quantity + safeQuantity }
+            : item,
+        );
       }
-      return [...prev, { ...product, size, quantity }];
+      return [
+        ...prev,
+        {
+          ...product,
+          size: safeSize,
+          color: safeColor,
+          quantity: safeQuantity,
+        },
+      ];
     });
   };
 
-  const removeFromCart = (id, size) => {
+  const removeFromCart = (id, size, color) => {
     setCart((prev) =>
-      prev.filter((item) => !(item.id === id && item.size === size)),
+      prev.filter(
+        (item) =>
+          !(item.id === id && item.size === size && item.color === color),
+      ),
+    );
+  };
+
+  // delta: +1 to increment, -1 to decrement.
+  // If quantity would drop to 0 or below, the item is removed entirely
+  // (matches the base version's "decrease → remove at 0" behaviour).
+  const updateQuantity = (id, size, color, delta) => {
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === id && item.size === size && item.color === color
+            ? { ...item, quantity: item.quantity + delta }
+            : item,
+        )
+        .filter((item) => item.quantity > 0),
     );
   };
 
@@ -36,7 +73,7 @@ export function CartProvider({ children }) {
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce(
-    (total, item) => total + item.price * item.quantity,
+    (total, item) => total + Number(item.price) * item.quantity,
     0,
   );
 
@@ -46,6 +83,7 @@ export function CartProvider({ children }) {
         cart,
         addToCart,
         removeFromCart,
+        updateQuantity,
         clearCart,
         cartCount,
         cartTotal,

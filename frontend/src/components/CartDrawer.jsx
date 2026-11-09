@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 
 export default function CartDrawer({ isOpen, onClose }) {
-  const { cart, removeFromCart, cartTotal } = useCart();
+  const { cart, removeFromCart, updateQuantity, cartTotal } = useCart();
 
   return (
     <>
@@ -31,33 +31,74 @@ export default function CartDrawer({ isOpen, onClose }) {
             </div>
           ) : (
             cart.map((item) => {
-              const imageUrl =
-                item.image_url.startsWith("http") ||
-                item.image_url.startsWith("/")
+              const imageUrl = item.image_url
+                ? item.image_url.startsWith("http") ||
+                  item.image_url.startsWith("/")
                   ? item.image_url
-                  : `/${item.image_url}`;
+                  : `/${item.image_url}`
+                : null;
 
               return (
                 <div
-                  key={`${item.id}-${item.size}`}
+                  key={`${item.id}-${item.size}-${item.color}`}
                   className="flex space-x-4 border-b pb-4 items-center"
                 >
-                  <img
-                    src={imageUrl}
-                    alt={item.name}
-                    className="w-16 h-20 object-cover bg-gray-100"
-                  />
-                  <div className="flex-grow text-xs space-y-1">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={item.name}
+                      className="w-16 h-20 object-cover bg-gray-100"
+                    />
+                  ) : (
+                    <div className="w-16 h-20 bg-gray-100" />
+                  )}
+                  <div className="flex-grow text-xs space-y-2">
                     <p className="font-medium">{item.name}</p>
                     <p className="text-gray-500">
-                      Size: {item.size} | Qty: {item.quantity}
+                      Size: {item.size} | Color: {item.color}
                     </p>
-                    <p className="font-semibold">
-                      ${(Number(item.price) * item.quantity).toFixed(2)}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold">
+                        ${(Number(item.price) * item.quantity).toFixed(2)}
+                      </p>
+
+                      {/* Quantity stepper */}
+                      <div className="flex items-center border border-gray-300">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(item.id, item.size, item.color, -1)
+                          }
+                          className="px-2 py-0.5 hover:bg-gray-100 transition leading-none"
+                          aria-label="Decrease quantity"
+                          title={
+                            item.quantity === 1
+                              ? "Remove item"
+                              : "Decrease quantity"
+                          }
+                        >
+                          −
+                        </button>
+                        <span className="px-2 text-xs tabular-nums">
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(item.id, item.size, item.color, 1)
+                          }
+                          className="px-2 py-0.5 hover:bg-gray-100 transition leading-none"
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <button
-                    onClick={() => removeFromCart(item.id, item.size)}
+                    onClick={() =>
+                      removeFromCart(item.id, item.size, item.color)
+                    }
                     className="text-gray-400 hover:text-red-500 text-sm px-2"
                   >
                     ✕

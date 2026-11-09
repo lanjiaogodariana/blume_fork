@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { apiPost, getImageUrl } from "../utils/api";
 
 export default function Checkout() {
   const { cart, cartTotal, clearCart } = useCart();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     user_name: "",
     user_email: "",
@@ -13,7 +15,6 @@ export default function Checkout() {
 
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(null);
   const [apiError, setApiError] = useState("");
 
   const validateField = (name, value) => {
@@ -77,37 +78,29 @@ export default function Checkout() {
       user_email: formData.user_email.trim(),
       phone: formData.phone.trim(),
       shipping_address: formData.shipping_address.trim(),
-      total_amount: cartTotal,
+      // total_amount omitted — server computes from DB prices
       items: cart.map((item) => ({
         id: item.id,
+        size: item.size,
+        color: item.color,
         quantity: item.quantity,
-        price: Number(item.price),
+        // price omitted — server computes from DB
       })),
     };
 
     try {
-      const res = await fetch("http://localhost:5000/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderPayload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to place order");
-      }
-
-      setOrderSuccess(data.orderId);
+      const data = await apiPost("/api/orders", orderPayload);
       clearCart();
+      setSubmitting(false);
+      navigate(`/order-success/${data.orderId}`);
     } catch (err) {
       console.error("Checkout error:", err);
       setApiError(err.message || "Something went wrong. Please try again.");
-    } finally {
       setSubmitting(false);
     }
   };
-
+  {
+    /*
   if (orderSuccess) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-24 text-center">
@@ -135,7 +128,8 @@ export default function Checkout() {
       </div>
     );
   }
-
+*/
+  }
   if (cart.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-24 text-center">
@@ -289,26 +283,27 @@ export default function Checkout() {
 
           <div className="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2">
             {cart.map((item) => {
-              const imageUrl =
-                item.image_url.startsWith("http") ||
-                item.image_url.startsWith("/")
-                  ? item.image_url
-                  : `/${item.image_url}`;
+              const imageUrl = getImageUrl(item.image_url);
 
               return (
                 <div
-                  key={`${item.id}-${item.size}`}
+                  key={`${item.id}-${item.size}-${item.color}`}
                   className="flex space-x-4 items-center"
                 >
-                  <img
-                    src={imageUrl}
-                    alt={item.name}
-                    className="w-14 h-18 object-cover bg-gray-200"
-                  />
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={item.name}
+                      className="w-14 h-18 object-cover bg-gray-200"
+                    />
+                  ) : (
+                    <div className="w-14 h-18 bg-gray-200" />
+                  )}
                   <div className="flex-grow text-xs space-y-1">
                     <p className="font-medium">{item.name}</p>
                     <p className="text-gray-500">
-                      Size: {item.size} | Qty: {item.quantity}
+                      Size: {item.size} | Color: {item.color} | Qty:{" "}
+                      {item.quantity}
                     </p>
                   </div>
                   <p className="text-xs font-semibold">

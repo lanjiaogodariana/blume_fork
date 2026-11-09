@@ -1,25 +1,44 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { apiGet, getImageUrl } from "../utils/api";
+
+// Parses a comma-separated string into a trimmed, non-empty array.
+// Falls back to a sensible default if the product has no such field.
+function parseList(str, fallback) {
+  const list = (str || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : fallback;
+}
 
 export default function Product() {
   const { id } = useParams();
   const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSize, setSelectedSize] = useState("M");
+  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedColor, setSelectedColor] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
   useEffect(() => {
+    // Reset all selection state when the product ID changes
     setLoading(true);
-    fetch(`http://localhost:5000/api/products/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Product not found");
-        return res.json();
-      })
+    setProduct(null);
+    setSelectedSize("");
+    setSelectedColor("");
+    setQuantity(1);
+    setAdded(false);
+
+    apiGet(`/api/products/${id}`)
       .then((data) => {
         setProduct(data);
+        const sizes = parseList(data.sizes, ["XS", "S", "M", "L", "XL"]);
+        const colors = parseList(data.colors, ["Standard"]);
+        setSelectedSize(sizes.includes("M") ? "M" : sizes[0]);
+        setSelectedColor(colors[0]);
         setLoading(false);
       })
       .catch((err) => {
@@ -29,8 +48,8 @@ export default function Product() {
   }, [id]);
 
   const handleAddToCart = () => {
-    if (product) {
-      addToCart(product, selectedSize, quantity);
+    if (product && selectedSize && selectedColor) {
+      addToCart(product, selectedSize, selectedColor, quantity);
       setAdded(true);
       setTimeout(() => setAdded(false), 2000);
     }
@@ -58,10 +77,10 @@ export default function Product() {
     );
   }
 
-  const imageUrl =
-    product.image_url.startsWith("http") || product.image_url.startsWith("/")
-      ? product.image_url
-      : `/${product.image_url}`;
+  const imageUrl = getImageUrl(product.image_url);
+
+  const availableSizes = parseList(product.sizes, ["XS", "S", "M", "L", "XL"]);
+  const availableColors = parseList(product.colors, ["Standard"]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -79,11 +98,15 @@ export default function Product() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div className="bg-gray-100 aspect-[3/4] relative overflow-hidden">
-          <img
-            src={imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-200" />
+          )}
         </div>
 
         <div className="flex flex-col space-y-6">
@@ -105,8 +128,8 @@ export default function Product() {
             <label className="block text-xs uppercase tracking-widest text-gray-500 mb-3">
               Select Size
             </label>
-            <div className="flex space-x-3">
-              {["XS", "S", "M", "L", "XL"].map((size) => (
+            <div className="flex flex-wrap gap-3">
+              {availableSizes.map((size) => (
                 <button
                   key={size}
                   onClick={() => setSelectedSize(size)}
@@ -117,6 +140,27 @@ export default function Product() {
                   }`}
                 >
                   {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-widest text-gray-500 mb-3">
+              Select Color
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {availableColors.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setSelectedColor(color)}
+                  className={`px-4 h-10 border text-xs tracking-widest flex items-center justify-center transition ${
+                    selectedColor === color
+                      ? "border-black bg-black text-white"
+                      : "border-gray-300 text-gray-700 hover:border-black"
+                  }`}
+                >
+                  {color}
                 </button>
               ))}
             </div>
@@ -141,7 +185,8 @@ export default function Product() {
 
             <button
               onClick={handleAddToCart}
-              className="flex-grow bg-black text-white py-4 text-xs tracking-widest uppercase hover:bg-gray-800 transition"
+              disabled={!selectedSize || !selectedColor}
+              className="flex-grow bg-black text-white py-4 text-xs tracking-widest uppercase hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {added ? "Added to Cart ✓" : "Add to Cart"}
             </button>
