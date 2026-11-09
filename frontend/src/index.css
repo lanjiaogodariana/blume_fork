@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: Arial, sans-serif;
+  color: #333333;
+  background-color: #ffffff;
+}
+
+.serif-font {
+  font-family: "Didot", "Bodoni MT", "Baskerville", "Georgia", serif;
+  font-weight: normal;
+  letter-spacing: 0.05em;
+}
